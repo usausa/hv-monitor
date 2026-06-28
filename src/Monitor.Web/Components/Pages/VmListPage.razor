@@ -1,0 +1,95 @@
+@page "/"
+
+<PageTitle>Hyper-V VM Monitor</PageTitle>
+
+<ProgressOverlay IsVisible="isRunning" Message="@progressMessage" />
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h5">仮想マシン一覧</MudText>
+    <MudSpacer />
+    <MudChip T="string" Icon="@Icons.Material.Filled.Dns" Color="Color.Default" Variant="Variant.Text">@hostName</MudChip>
+    @if (isElevated)
+    {
+        <MudChip T="string" Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Success" Variant="Variant.Text">管理者</MudChip>
+    }
+    else
+    {
+        <MudTooltip Text="VM の操作には管理者権限が必要です。アプリを管理者として実行してください。">
+            <MudChip T="string" Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Variant="Variant.Text">非管理者</MudChip>
+        </MudTooltip>
+    }
+    <MudButton StartIcon="@Icons.Material.Filled.Refresh" Variant="Variant.Filled" Color="Color.Primary"
+               OnClick="LoadAsync" Disabled="@(isLoading || isRunning)">更新</MudButton>
+</MudStack>
+
+@if (errorMessage is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="@(() => errorMessage = null)">@errorMessage</MudAlert>
+}
+
+<MudTable Items="virtualMachines" Dense="true" Hover="true" Bordered="true" Striped="true"
+          Loading="isLoading" LoadingProgressColor="Color.Primary">
+    <HeaderContent>
+        <MudTh>名前</MudTh>
+        <MudTh>状態</MudTh>
+        <MudTh Style="text-align:right">CPU (%)</MudTh>
+        <MudTh Style="text-align:right">メモリ (MB)</MudTh>
+        <MudTh Style="text-align:right">稼働時間</MudTh>
+        <MudTh>バージョン</MudTh>
+        <MudTh Style="text-align:center">操作</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="名前">@context.Name</MudTd>
+        <MudTd DataLabel="状態">
+            <MudChip T="string" Color="StateColor(context.State)" Size="Size.Small" Variant="Variant.Filled">@StateLabel(context.State)</MudChip>
+        </MudTd>
+        <MudTd DataLabel="CPU (%)" Style="text-align:right">@FormatCpu(context.CpuUsagePercent)</MudTd>
+        <MudTd DataLabel="メモリ (MB)" Style="text-align:right">@FormatMemory(context.MemoryUsageMb)</MudTd>
+        <MudTd DataLabel="稼働時間" Style="text-align:right">@FormatUptime(context.Uptime)</MudTd>
+        <MudTd DataLabel="バージョン">@(context.Version ?? "-")</MudTd>
+        <MudTd DataLabel="操作" Style="text-align:center">
+            @if (VmActionPolicy.CanStart(context.State))
+            {
+                <MudTooltip Text="開始">
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small" Disabled="isRunning" OnClick="@(() => StartAsync(context))" />
+                </MudTooltip>
+            }
+            @if (VmActionPolicy.CanResume(context.State))
+            {
+                <MudTooltip Text="再開">
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small" Disabled="isRunning" OnClick="@(() => ResumeAsync(context))" />
+                </MudTooltip>
+            }
+            @if (VmActionPolicy.CanPause(context.State))
+            {
+                <MudTooltip Text="一時停止">
+                    <MudIconButton Icon="@Icons.Material.Filled.Pause" Color="Color.Default" Size="Size.Small" Disabled="isRunning" OnClick="@(() => PauseAsync(context))" />
+                </MudTooltip>
+            }
+            @if (VmActionPolicy.CanSave(context.State))
+            {
+                <MudTooltip Text="状態保存">
+                    <MudIconButton Icon="@Icons.Material.Filled.Save" Color="Color.Info" Size="Size.Small" Disabled="isRunning" OnClick="@(() => SaveAsync(context))" />
+                </MudTooltip>
+            }
+            @if (VmActionPolicy.CanShutdown(context.State))
+            {
+                <MudTooltip Text="シャットダウン">
+                    <MudIconButton Icon="@Icons.Material.Filled.PowerSettingsNew" Color="Color.Warning" Size="Size.Small" Disabled="isRunning" OnClick="@(() => ShutdownAsync(context))" />
+                </MudTooltip>
+            }
+            @if (VmActionPolicy.CanTurnOff(context.State))
+            {
+                <MudTooltip Text="強制停止">
+                    <MudIconButton Icon="@Icons.Material.Filled.Stop" Color="Color.Error" Size="Size.Small" Disabled="isRunning" OnClick="@(() => TurnOffAsync(context))" />
+                </MudTooltip>
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <MudText>仮想マシンが見つかりません。</MudText>
+    </NoRecordsContent>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>

@@ -12,4 +12,8 @@
     <File Path="Monitor.sln.DotSettings" />
     <File Path="README.md" />
   </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Monitor.Core/Monitor.Core.csproj" />
+    <Project Path="src/Monitor.Web/Monitor.Web.csproj" />
+  </Folder>
 </Solution>

@@ -1,0 +1,11 @@
+@if (IsVisible)
+{
+    <MudOverlay Visible="true" DarkBackground="true" ZIndex="9998">
+        <MudPaper Class="pa-6" Elevation="4" Style="min-width:280px">
+            <MudStack AlignItems="AlignItems.Center" Spacing="3">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                <MudText Typo="Typo.body1" Align="Align.Center">@Message</MudText>
+            </MudStack>
+        </MudPaper>
+    </MudOverlay>
+}
