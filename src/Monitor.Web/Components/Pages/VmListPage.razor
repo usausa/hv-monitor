@@ -7,29 +7,66 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
     <MudText Typo="Typo.h5">仮想マシン一覧</MudText>
     <MudSpacer />
-    <MudChip T="string" Icon="@Icons.Material.Filled.Dns" Color="Color.Default" Variant="Variant.Text">@hostName</MudChip>
-    @if (isElevated)
-    {
-        <MudChip T="string" Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Success" Variant="Variant.Text">管理者</MudChip>
-    }
-    else
-    {
-        <MudTooltip Text="VM の操作には管理者権限が必要です。アプリを管理者として実行してください。">
-            <MudChip T="string" Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Variant="Variant.Text">非管理者</MudChip>
-        </MudTooltip>
-    }
     <MudButton StartIcon="@Icons.Material.Filled.Refresh" Variant="Variant.Filled" Color="Color.Primary"
                OnClick="LoadAsync" Disabled="@(isLoading || isRunning)">更新</MudButton>
 </MudStack>
+
+@if (hostResults.Count > 0)
+{
+    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+        @foreach (var host in hostResults)
+        {
+            <MudPaper Class="px-3 py-1" Elevation="0" Outlined="true">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudIcon Icon="@Icons.Material.Filled.Dns" Size="Size.Small" />
+                    <MudText Typo="Typo.body2">@host.HostName</MudText>
+                    @if (host.Error is not null)
+                    {
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.CloudOff">到達不可</MudChip>
+                    }
+                    else if (host.IsElevated)
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.AdminPanelSettings">管理者</MudChip>
+                    }
+                    else
+                    {
+                        <MudTooltip Text="VM の操作には管理者権限が必要です。Agent を管理者として実行してください。">
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Warning">非管理者</MudChip>
+                        </MudTooltip>
+                    }
+                </MudStack>
+            </MudPaper>
+        }
+    </MudStack>
+}
+
+@foreach (var host in FailedHosts)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-2" Icon="@Icons.Material.Filled.CloudOff">
+        @host.HostName への接続に失敗しました: @host.Error
+    </MudAlert>
+}
 
 @if (errorMessage is not null)
 {
     <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="@(() => errorMessage = null)">@errorMessage</MudAlert>
 }
 
-<MudTable Items="virtualMachines" Dense="true" Hover="true" Bordered="true" Striped="true"
+@if (HasMultipleHosts)
+{
+    <MudSelect T="string" Label="ホストで絞り込み" @bind-Value="HostFilter" Dense="true" Class="mb-4" Style="max-width: 320px;">
+        <MudSelectItem T="string" Value="@string.Empty">すべて</MudSelectItem>
+        @foreach (var host in hostResults)
+        {
+            <MudSelectItem T="string" Value="@host.HostName">@host.HostName</MudSelectItem>
+        }
+    </MudSelect>
+}
+
+<MudTable Items="Rows" Dense="true" Hover="true" Bordered="true" Striped="true"
           Loading="isLoading" LoadingProgressColor="Color.Primary">
     <HeaderContent>
+        <MudTh>ホスト</MudTh>
         <MudTh>名前</MudTh>
         <MudTh>状態</MudTh>
         <MudTh Style="text-align:right">CPU (%)</MudTh>
@@ -39,46 +76,47 @@
         <MudTh Style="text-align:center">操作</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="名前">@context.Name</MudTd>
+        <MudTd DataLabel="ホスト">@context.HostName</MudTd>
+        <MudTd DataLabel="名前">@context.Vm.Name</MudTd>
         <MudTd DataLabel="状態">
-            <MudChip T="string" Color="StateColor(context.State)" Size="Size.Small" Variant="Variant.Filled">@StateLabel(context.State)</MudChip>
+            <MudChip T="string" Color="StateColor(context.Vm.State)" Size="Size.Small" Variant="Variant.Filled">@StateLabel(context.Vm.State)</MudChip>
         </MudTd>
-        <MudTd DataLabel="CPU (%)" Style="text-align:right">@FormatCpu(context.CpuUsagePercent)</MudTd>
-        <MudTd DataLabel="メモリ (MB)" Style="text-align:right">@FormatMemory(context.MemoryUsageMb)</MudTd>
-        <MudTd DataLabel="稼働時間" Style="text-align:right">@FormatUptime(context.Uptime)</MudTd>
-        <MudTd DataLabel="バージョン">@(context.Version ?? "-")</MudTd>
+        <MudTd DataLabel="CPU (%)" Style="text-align:right">@FormatCpu(context.Vm.CpuUsagePercent)</MudTd>
+        <MudTd DataLabel="メモリ (MB)" Style="text-align:right">@FormatMemory(context.Vm.MemoryUsageMb)</MudTd>
+        <MudTd DataLabel="稼働時間" Style="text-align:right">@FormatUptime(context.Vm.Uptime)</MudTd>
+        <MudTd DataLabel="バージョン">@(context.Vm.Version ?? "-")</MudTd>
         <MudTd DataLabel="操作" Style="text-align:center">
-            @if (VmActionPolicy.CanStart(context.State))
+            @if (VmActionPolicy.CanStart(context.Vm.State))
             {
                 <MudTooltip Text="開始">
                     <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small" Disabled="isRunning" OnClick="@(() => StartAsync(context))" />
                 </MudTooltip>
             }
-            @if (VmActionPolicy.CanResume(context.State))
+            @if (VmActionPolicy.CanResume(context.Vm.State))
             {
                 <MudTooltip Text="再開">
                     <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Color="Color.Success" Size="Size.Small" Disabled="isRunning" OnClick="@(() => ResumeAsync(context))" />
                 </MudTooltip>
             }
-            @if (VmActionPolicy.CanPause(context.State))
+            @if (VmActionPolicy.CanPause(context.Vm.State))
             {
                 <MudTooltip Text="一時停止">
                     <MudIconButton Icon="@Icons.Material.Filled.Pause" Color="Color.Default" Size="Size.Small" Disabled="isRunning" OnClick="@(() => PauseAsync(context))" />
                 </MudTooltip>
             }
-            @if (VmActionPolicy.CanSave(context.State))
+            @if (VmActionPolicy.CanSave(context.Vm.State))
             {
                 <MudTooltip Text="状態保存">
                     <MudIconButton Icon="@Icons.Material.Filled.Save" Color="Color.Info" Size="Size.Small" Disabled="isRunning" OnClick="@(() => SaveAsync(context))" />
                 </MudTooltip>
             }
-            @if (VmActionPolicy.CanShutdown(context.State))
+            @if (VmActionPolicy.CanShutdown(context.Vm.State))
             {
                 <MudTooltip Text="シャットダウン">
                     <MudIconButton Icon="@Icons.Material.Filled.PowerSettingsNew" Color="Color.Warning" Size="Size.Small" Disabled="isRunning" OnClick="@(() => ShutdownAsync(context))" />
                 </MudTooltip>
             }
-            @if (VmActionPolicy.CanTurnOff(context.State))
+            @if (VmActionPolicy.CanTurnOff(context.Vm.State))
             {
                 <MudTooltip Text="強制停止">
                     <MudIconButton Icon="@Icons.Material.Filled.Stop" Color="Color.Error" Size="Size.Small" Disabled="isRunning" OnClick="@(() => TurnOffAsync(context))" />

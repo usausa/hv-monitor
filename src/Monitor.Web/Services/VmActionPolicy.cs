@@ -1,6 +1,6 @@
 namespace Monitor.Web.Services;
 
-using Monitor.Core.Models;
+using Monitor.Contracts;
 
 // Determines which operations are available for a given VM state.
 public static class VmActionPolicy

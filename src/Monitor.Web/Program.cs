@@ -1,4 +1,3 @@
-using Monitor.Core.HyperV;
 using Monitor.Web.Components;
 using Monitor.Web.Services;
 
@@ -12,7 +11,9 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 
-builder.Services.AddSingleton<IHyperVService, HyperVService>();
+builder.Services.Configure<HyperVHostsOptions>(builder.Configuration);
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IHyperVApiClient, HyperVApiClient>();
 
 builder.Services.AddScoped<ToastService>();
 

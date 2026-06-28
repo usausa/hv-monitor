@@ -1,6 +1,6 @@
 namespace Monitor.Core.HyperV;
 
-using Monitor.Core.Models;
+using Monitor.Contracts;
 
 public interface IHyperVService
 {

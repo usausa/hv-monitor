@@ -4,7 +4,7 @@ using System.Globalization;
 
 using Microsoft.Management.Infrastructure;
 
-using Monitor.Core.Models;
+using Monitor.Contracts;
 using Monitor.Core.Security;
 
 public sealed class HyperVService : IHyperVService

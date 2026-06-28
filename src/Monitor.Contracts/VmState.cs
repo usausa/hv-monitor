@@ -1,4 +1,4 @@
-namespace Monitor.Core.Models;
+namespace Monitor.Contracts;
 
 public enum VmState
 {

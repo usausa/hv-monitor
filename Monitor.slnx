@@ -13,6 +13,8 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Monitor.Agent/Monitor.Agent.csproj" />
+    <Project Path="src/Monitor.Contracts/Monitor.Contracts.csproj" />
     <Project Path="src/Monitor.Core/Monitor.Core.csproj" />
     <Project Path="src/Monitor.Web/Monitor.Web.csproj" />
   </Folder>
