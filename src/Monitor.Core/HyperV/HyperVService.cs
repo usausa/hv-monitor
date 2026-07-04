@@ -29,6 +29,9 @@ public sealed class HyperVService : IHyperVService
     public ValueTask<IReadOnlyList<VmInfo>> GetVirtualMachinesAsync(CancellationToken cancellationToken = default) =>
         new(Task.Run<IReadOnlyList<VmInfo>>(() => QueryVirtualMachines(cancellationToken), cancellationToken));
 
+    public ValueTask<HostMetrics> GetHostMetricsAsync(CancellationToken cancellationToken = default) =>
+        new(Task.Run(() => QueryHostMetrics(cancellationToken), cancellationToken));
+
     public ValueTask StartAsync(string id, CancellationToken cancellationToken = default) =>
         RunStateChangeAsync(id, RequestedStateEnabled, cancellationToken);
 
@@ -110,6 +113,126 @@ public sealed class HyperVService : IHyperVService
         {
             throw new HyperVException($"仮想マシン一覧の取得に失敗しました: {ex.Message}", ex);
         }
+    }
+
+    // --- Host metrics ---
+
+    private static HostMetrics QueryHostMetrics(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var session = CimSession.Create(null);
+
+            var cpu = QueryCpuPercent(session, cancellationToken);
+            var (totalMb, usedMb) = QueryMemory(session, cancellationToken);
+            var disks = QueryDisks(session, cancellationToken);
+
+            return new HostMetrics(cpu, totalMb, usedMb, disks);
+        }
+        catch (CimException ex)
+        {
+            throw new HyperVException($"ホストメトリクスの取得に失敗しました: {ex.Message}", ex);
+        }
+    }
+
+    private static double QueryCpuPercent(CimSession session, CancellationToken cancellationToken)
+    {
+        // Prefer the Hyper-V hypervisor logical-processor counter (most accurate on a Hyper-V host).
+        const string hyperVQuery = $"SELECT PercentTotalRunTime FROM {CimConstants.HyperVLogicalProcessorPerfClass} WHERE Name = '_Total'";
+        var hyperV = TryQueryScalar<ulong>(session, hyperVQuery, "PercentTotalRunTime", cancellationToken);
+        if (hyperV.HasValue)
+        {
+            return hyperV.Value;
+        }
+
+        // Fallback: OS total processor time counter.
+        const string osQuery = $"SELECT PercentProcessorTime FROM {CimConstants.ProcessorPerfClass} WHERE Name = '_Total'";
+        var os = TryQueryScalar<ulong>(session, osQuery, "PercentProcessorTime", cancellationToken);
+        if (os.HasValue)
+        {
+            return os.Value;
+        }
+
+        // Last resort: Win32_Processor.LoadPercentage (first socket).
+        const string loadQuery = $"SELECT LoadPercentage FROM {CimConstants.ProcessorClass}";
+        var load = TryQueryScalar<ushort>(session, loadQuery, "LoadPercentage", cancellationToken);
+        if (load.HasValue)
+        {
+            return load.Value;
+        }
+
+        return 0d;
+    }
+
+    private static (long TotalMb, long UsedMb) QueryMemory(CimSession session, CancellationToken cancellationToken)
+    {
+        const string query = $"SELECT TotalVisibleMemorySize, FreePhysicalMemory FROM {CimConstants.OperatingSystemClass}";
+
+        foreach (var instance in session.QueryInstances(CimConstants.Cimv2Namespace, "WQL", query))
+        {
+            using (instance)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var totalKb = GetNullableValue<ulong>(instance, "TotalVisibleMemorySize") ?? 0;
+                var freeKb = GetNullableValue<ulong>(instance, "FreePhysicalMemory") ?? 0;
+                var usedKb = totalKb > freeKb ? totalKb - freeKb : 0;
+
+                return ((long)(totalKb / 1024), (long)(usedKb / 1024));
+            }
+        }
+
+        return (0, 0);
+    }
+
+    private static List<DiskInfo> QueryDisks(CimSession session, CancellationToken cancellationToken)
+    {
+        // DriveType = 3 selects local fixed disks only.
+        const string query = $"SELECT DeviceID, Size, FreeSpace FROM {CimConstants.LogicalDiskClass} WHERE DriveType = 3";
+
+        var disks = new List<DiskInfo>();
+        foreach (var instance in session.QueryInstances(CimConstants.Cimv2Namespace, "WQL", query))
+        {
+            using (instance)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var name = GetString(instance, "DeviceID");
+                if (name is null)
+                {
+                    continue;
+                }
+
+                var size = GetNullableValue<ulong>(instance, "Size") ?? 0;
+                var free = GetNullableValue<ulong>(instance, "FreeSpace") ?? 0;
+
+                disks.Add(new DiskInfo(name, (long)size, (long)free));
+            }
+        }
+
+        return disks;
+    }
+
+    private static T? TryQueryScalar<T>(CimSession session, string query, string propertyName, CancellationToken cancellationToken)
+        where T : struct
+    {
+        try
+        {
+            foreach (var instance in session.QueryInstances(CimConstants.Cimv2Namespace, "WQL", query))
+            {
+                using (instance)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return GetNullableValue<T>(instance, propertyName);
+                }
+            }
+        }
+        catch (CimException)
+        {
+            // Counter class may be unavailable on this host; fall back to the next source.
+        }
+
+        return null;
     }
 
     // --- Operations ---

@@ -8,6 +8,8 @@ public interface IHyperVService
 
     ValueTask<IReadOnlyList<VmInfo>> GetVirtualMachinesAsync(CancellationToken cancellationToken = default);
 
+    ValueTask<HostMetrics> GetHostMetricsAsync(CancellationToken cancellationToken = default);
+
     ValueTask StartAsync(string id, CancellationToken cancellationToken = default);
 
     ValueTask ShutdownAsync(string id, bool force, CancellationToken cancellationToken = default);

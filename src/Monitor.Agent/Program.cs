@@ -31,6 +31,34 @@ app.MapGet("/api/health", () => Results.Ok());
 app.MapGet("/api/host", (IHyperVService hyperV) =>
     Results.Ok(new HostInfo(Environment.MachineName, hyperV.IsElevated)));
 
+app.MapGet("/api/host/metrics", async (IHyperVService hyperV, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var metrics = await hyperV.GetHostMetricsAsync(cancellationToken);
+        return Results.Ok(metrics);
+    }
+    catch (HyperVException ex)
+    {
+        return Results.Problem(ex.Message, statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
+app.MapGet("/api/snapshot", async (IHyperVService hyperV, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var host = new HostInfo(Environment.MachineName, hyperV.IsElevated);
+        var metrics = await hyperV.GetHostMetricsAsync(cancellationToken);
+        var vms = await hyperV.GetVirtualMachinesAsync(cancellationToken);
+        return Results.Ok(new HostSnapshot(host, metrics, vms));
+    }
+    catch (HyperVException ex)
+    {
+        return Results.Problem(ex.Message, statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
 app.MapGet("/api/vms", async (IHyperVService hyperV, CancellationToken cancellationToken) =>
 {
     try

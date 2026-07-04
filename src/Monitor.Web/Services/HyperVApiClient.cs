@@ -10,8 +10,7 @@ using Monitor.Contracts;
 public sealed class HyperVApiClient : IHyperVApiClient
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(120);
-    private static readonly Uri HostEndpoint = new("/api/host", UriKind.Relative);
-    private static readonly Uri VmsEndpoint = new("/api/vms", UriKind.Relative);
+    private static readonly Uri SnapshotEndpoint = new("/api/snapshot", UriKind.Relative);
 
     private readonly IHttpClientFactory httpClientFactory;
     private readonly IReadOnlyList<HyperVHostOptions> hosts;
@@ -27,7 +26,7 @@ public sealed class HyperVApiClient : IHyperVApiClient
         this.logger = logger;
     }
 
-    public async Task<IReadOnlyList<HostVmResult>> GetVirtualMachinesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<HostVmResult>> GetSnapshotAsync(CancellationToken cancellationToken = default)
     {
         var tasks = hosts.Select(host => GetHostResultAsync(host, cancellationToken)).ToArray();
         return await Task.WhenAll(tasks);
@@ -63,15 +62,18 @@ public sealed class HyperVApiClient : IHyperVApiClient
         {
             using var client = CreateClient(host);
 
-            var hostInfo = await client.GetFromJsonAsync<HostInfo>(HostEndpoint, cancellationToken);
-            var vms = await client.GetFromJsonAsync<List<VmInfo>>(VmsEndpoint, cancellationToken);
+            var snapshot = await client.GetFromJsonAsync<HostSnapshot>(SnapshotEndpoint, cancellationToken);
+            if (snapshot is null)
+            {
+                return new HostVmResult(host.Name, IsElevated: false, Metrics: null, [], "応答が空でした");
+            }
 
-            return new HostVmResult(host.Name, hostInfo?.IsElevated ?? false, vms ?? [], null);
+            return new HostVmResult(host.Name, snapshot.Host.IsElevated, snapshot.Metrics, snapshot.Vms, null);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException or System.Text.Json.JsonException)
         {
             logger.LogWarning(ex, "Failed to query host {HostName} ({BaseUrl})", host.Name, host.BaseUrl);
-            return new HostVmResult(host.Name, IsElevated: false, [], ex.Message);
+            return new HostVmResult(host.Name, IsElevated: false, Metrics: null, [], ex.Message);
         }
     }
 

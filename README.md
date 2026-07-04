@@ -130,6 +130,7 @@ dotnet build Monitor.slnx
 
 - アーキテクチャ: [docs/architecture.md](docs/architecture.md)
 - 実装プラン: [docs/implementation-plan.md](docs/implementation-plan.md)
+- 拡張設計（リアルタイム更新 & ホストメトリクス）: [docs/realtime-and-metrics-plan.md](docs/realtime-and-metrics-plan.md)
 - 仕様（旧モノリス版の草案）: [docs/spec-draft.md](docs/spec-draft.md)
 
 ## 注意

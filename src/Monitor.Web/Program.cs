@@ -12,8 +12,11 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 
 builder.Services.Configure<HyperVHostsOptions>(builder.Configuration);
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection("Monitoring"));
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<IHyperVApiClient, HyperVApiClient>();
+builder.Services.AddSingleton<IHyperVApiClient, HyperVApiClient>();
+builder.Services.AddSingleton<IVmSnapshotBus, VmSnapshotBus>();
+builder.Services.AddHostedService<VmMonitorBackgroundService>();
 
 builder.Services.AddScoped<ToastService>();
 

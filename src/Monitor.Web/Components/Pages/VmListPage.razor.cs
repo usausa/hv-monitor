@@ -11,7 +11,7 @@ using Monitor.Web.Services;
 
 using MudBlazor;
 
-public partial class VmListPage
+public sealed partial class VmListPage : IDisposable
 {
     private IReadOnlyList<HostVmResult> hostResults = [];
     private bool isLoading;
@@ -21,6 +21,9 @@ public partial class VmListPage
 
     [Inject]
     private IHyperVApiClient ApiClient { get; set; } = default!;
+
+    [Inject]
+    private IVmSnapshotBus Bus { get; set; } = default!;
 
     [Inject]
     private ToastService Toast { get; set; } = default!;
@@ -50,21 +53,43 @@ public partial class VmListPage
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
+        Bus.Updated += OnSnapshotUpdated;
+
+        // Show the latest snapshot immediately instead of waiting for the next poll.
+        hostResults = Bus.Current;
+        if (hostResults.Count == 0)
+        {
+            await RefreshAsync();
+        }
     }
 
-    private async Task LoadAsync()
+    private void OnSnapshotUpdated(object? sender, VmSnapshotEventArgs e) =>
+        InvokeAsync(() =>
+        {
+            hostResults = e.Snapshot;
+            StateHasChanged();
+        });
+
+    public void Dispose()
+    {
+        Bus.Updated -= OnSnapshotUpdated;
+        GC.SuppressFinalize(this);
+    }
+
+    private async Task RefreshAsync()
     {
         isLoading = true;
         errorMessage = null;
         try
         {
-            hostResults = await ApiClient.GetVirtualMachinesAsync();
+            var snapshot = await ApiClient.GetSnapshotAsync();
+
+            // Publish so every open page (including this one, via OnSnapshotUpdated) reflects the new data.
+            Bus.Publish(snapshot);
         }
         catch (HyperVApiException ex)
         {
             errorMessage = ex.Message;
-            hostResults = [];
         }
         finally
         {
@@ -157,7 +182,7 @@ public partial class VmListPage
             await operation(CancellationToken.None);
             Logger.LogInformation("VM operation succeeded: {Message}", successMessage);
             Toast.Success(successMessage);
-            await LoadAsync();
+            await RefreshAsync();
         }
         catch (HyperVApiException ex)
         {
@@ -218,6 +243,28 @@ public partial class VmListPage
             ? $"{value.Days}d {value.Hours:D2}:{value.Minutes:D2}:{value.Seconds:D2}"
             : $"{value.Hours:D2}:{value.Minutes:D2}:{value.Seconds:D2}";
     }
+
+    private static string FormatPercent(double value) =>
+        value.ToString("F0", CultureInfo.CurrentCulture) + "%";
+
+    private static string FormatGb(long megabytes) =>
+        (megabytes / 1024.0).ToString("F1", CultureInfo.CurrentCulture) + " GB";
+
+    private static string FormatGib(long bytes) =>
+        (bytes / 1073741824.0).ToString("F0", CultureInfo.CurrentCulture) + " GB";
+
+    private static double MemoryPercent(HostMetrics metrics) =>
+        metrics.TotalMemoryMb <= 0 ? 0 : 100.0 * metrics.UsedMemoryMb / metrics.TotalMemoryMb;
+
+    private static double DiskUsedPercent(DiskInfo disk) =>
+        disk.TotalBytes <= 0 ? 0 : 100.0 * (disk.TotalBytes - disk.FreeBytes) / disk.TotalBytes;
+
+    private static Color UsageColor(double percent) => percent switch
+    {
+        >= 90 => Color.Error,
+        >= 75 => Color.Warning,
+        _ => Color.Primary
+    };
 
     private sealed record VmRow(string HostName, VmInfo Vm);
 }
