@@ -44,12 +44,24 @@ app.MapGet("/api/host/metrics", async (IHyperVService hyperV, CancellationToken 
     }
 });
 
-app.MapGet("/api/snapshot", async (IHyperVService hyperV, CancellationToken cancellationToken) =>
+app.MapGet("/api/snapshot", async (IHyperVService hyperV, ILogger<Program> logger, CancellationToken cancellationToken) =>
 {
     try
     {
         var host = new HostInfo(Environment.MachineName, hyperV.IsElevated);
-        var metrics = await hyperV.GetHostMetricsAsync(cancellationToken);
+
+        // Host counters are optional: if they are unavailable, report null metrics
+        // rather than failing the whole snapshot, so the VM list still reaches the UI.
+        HostMetrics? metrics = null;
+        try
+        {
+            metrics = await hyperV.GetHostMetricsAsync(cancellationToken);
+        }
+        catch (HyperVException ex)
+        {
+            logger.LogWarning(ex, "Host metrics unavailable; returning snapshot without metrics");
+        }
+
         var vms = await hyperV.GetVirtualMachinesAsync(cancellationToken);
         return Results.Ok(new HostSnapshot(host, metrics, vms));
     }
@@ -98,6 +110,10 @@ static async Task<IResult> ExecuteAsync(Func<Task> operation)
     {
         await operation();
         return Results.Ok();
+    }
+    catch (VmNotFoundException ex)
+    {
+        return Results.Problem(ex.Message, statusCode: StatusCodes.Status404NotFound);
     }
     catch (HyperVException ex)
     {

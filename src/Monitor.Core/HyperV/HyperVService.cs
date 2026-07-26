@@ -299,7 +299,7 @@ public sealed class HyperVService : IHyperVService
             return instance;
         }
 
-        throw new HyperVException($"仮想マシンが見つかりません: {id}");
+        throw new VmNotFoundException($"仮想マシンが見つかりません: {id}");
     }
 
     private static CimInstance? FindShutdownComponent(CimSession session, CimInstance vm)

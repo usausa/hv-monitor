@@ -24,7 +24,9 @@ Web は全ホストへ並列に問い合わせ、結果を 1 つの表に統合�
 ## 機能
 
 - 複数ホストの VM 一覧を 1 表に統合表示（ホスト・名前・状態・CPU・メモリ・稼働時間・バージョン）
-- ホストでの絞り込み、手動更新、ホストごとの管理者権限（isElevated）/到達可否の表示
+- ホストメトリクスの表示（ホストごとの CPU 使用率・メモリ使用量・各固定ディスクの空き容量）
+- 自動更新（既定 10 秒間隔のポーリング。Web 側で集約するため Agent への負荷はブラウザ数に依存しない）と手動更新
+- ホストでの絞り込み、ホストごとの管理者権限（isElevated）/到達可否の表示
 - VM 操作: 開始 / 再開 / 一時停止 / 状態保存 / シャットダウン（正常終了）/ 強制停止（電源オフ）
 - 状態に応じた操作ボタンの出し分け、操作前の確認ダイアログ、進捗・成否のトースト通知、操作の監査ログ出力
 
@@ -32,7 +34,7 @@ Web は全ホストへ並列に問い合わせ、結果を 1 つの表に統合�
 
 | プロジェクト | TFM | 役割 | 参照 |
 |---|---|---|---|
-| `src/Monitor.Contracts` | net10.0 | DTO・API 契約（`VmInfo`/`VmState`/`HostInfo`/`ShutdownRequest`） | なし |
+| `src/Monitor.Contracts` | net10.0 | DTO・API 契約（`VmInfo`/`VmState`/`HostInfo`/`HostMetrics`/`DiskInfo`/`HostSnapshot`/`ShutdownRequest`） | なし |
 | `src/Monitor.Core` | net10.0-windows | Hyper-V アクセス（CIM / Microsoft.Management.Infrastructure） | Contracts |
 | `src/Monitor.Agent` | net10.0-windows | API サーバ（Minimal API、X-Api-Key 認証） | Core, Contracts |
 | `src/Monitor.Web` | net10.0 | 中央 UI（Blazor Server、MudBlazor、HTTP クライアント） | Contracts |
@@ -65,7 +67,9 @@ curl -H "X-Api-Key: <KEY>" http://localhost:5100/api/vms     # VM 一覧（JSON�
 ### 2. Monitor.Web（中央に 1 つ配置）
 
 1. `src/Monitor.Web/appsettings.json` の `HyperVHosts` に、各 Agent の `Name` / `BaseUrl` / `ApiKey` を登録します。
-2. 起動します（管理者権限は不要）。
+2. 必要に応じて `Monitoring` で自動更新を調整します（`Enabled`: 既定 true、`RefreshIntervalSeconds`: 既定 10）。
+   `Enabled` を false にすると自動更新を停止し、手動更新のみになります。
+3. 起動します（管理者権限は不要）。
 
 ```
 dotnet run --project src/Monitor.Web
@@ -95,6 +99,8 @@ dotnet run --project src/Monitor.Web --launch-profile http
 |---|---|---|---|
 | GET | `/api/health` | 疎通確認（認証不要） | - |
 | GET | `/api/host` | ホスト情報 `{ name, isElevated }` | - |
+| GET | `/api/host/metrics` | ホストメトリクス `{ cpuUsagePercent, totalMemoryMb, usedMemoryMb, disks }` | - |
+| GET | `/api/snapshot` | ホスト情報＋メトリクス＋VM 一覧を一括取得（Web の定常取得はこれを使用） | - |
 | GET | `/api/vms` | VM 一覧 | - |
 | POST | `/api/vms/{id}/start` | 開始 | - |
 | POST | `/api/vms/{id}/resume` | 再開 | - |
@@ -103,7 +109,8 @@ dotnet run --project src/Monitor.Web --launch-profile http
 | POST | `/api/vms/{id}/shutdown` | 正常シャットダウン | `{ "force": bool }` |
 | POST | `/api/vms/{id}/turnoff` | 強制電源オフ | - |
 
-エラーは `ProblemDetails` で返します（VM 未検出は 404、操作失敗は 409/500、認証失敗は 401）。
+エラーは `ProblemDetails` で返します（VM 未検出は 404、操作失敗は 409、取得失敗は 500、認証失敗は 401）。
+`/api/snapshot` はホストメトリクスのみ取得できなかった場合、エラーにせず `metrics: null` を返し、VM 一覧は維持します。
 
 ## セキュリティ
 
@@ -125,13 +132,15 @@ dotnet build Monitor.slnx
   - 一覧取得: `Msvm_SummaryInformation`
   - 状態変更: `Msvm_ComputerSystem.RequestStateChange`（非同期ジョブは `Msvm_ConcreteJob` を監視）
   - 正常シャットダウン: `Msvm_ShutdownComponent.InitiateShutdown`
+- ホストメトリクス: CIM（名前空間 `root\cimv2`、`Win32_*` クラス）
+  - CPU: `Win32_PerfFormattedData_Counters_HyperVHypervisorLogicalProcessor` →
+    `Win32_PerfFormattedData_PerfOS_Processor` → `Win32_Processor` の 3 段フォールバック
+  - メモリ: `Win32_OperatingSystem` / ディスク: `Win32_LogicalDisk`（`DriveType=3`）
+- 自動更新: `BackgroundService`（`PeriodicTimer`）+ イベントバスで全画面へ配信
 
 ## ドキュメント
 
-- アーキテクチャ: [docs/architecture.md](docs/architecture.md)
-- 実装プラン: [docs/implementation-plan.md](docs/implementation-plan.md)
-- 拡張設計（リアルタイム更新 & ホストメトリクス）: [docs/realtime-and-metrics-plan.md](docs/realtime-and-metrics-plan.md)
-- 仕様（旧モノリス版の草案）: [docs/spec-draft.md](docs/spec-draft.md)
+- 仕様（確定版）: [docs/architecture.md](docs/architecture.md)
 
 ## 注意
 
