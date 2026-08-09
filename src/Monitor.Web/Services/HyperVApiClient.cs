@@ -9,7 +9,8 @@ using Monitor.Contracts;
 
 public sealed class HyperVApiClient : IHyperVApiClient
 {
-    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(120);
+    public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(120);
+
     private static readonly Uri SnapshotEndpoint = new("/api/snapshot", UriKind.Relative);
 
     private readonly IHttpClientFactory httpClientFactory;
@@ -70,7 +71,7 @@ public sealed class HyperVApiClient : IHyperVApiClient
 
             return new HostVmResult(host.Name, snapshot.Host.IsElevated, snapshot.Metrics, snapshot.Vms, null);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException)
         {
             logger.LogWarning(ex, "Failed to query host {HostName} ({BaseUrl})", host.Name, host.BaseUrl);
             return new HostVmResult(host.Name, IsElevated: false, Metrics: null, [], ex.Message);
@@ -89,14 +90,10 @@ public sealed class HyperVApiClient : IHyperVApiClient
         }
     }
 
-    private HttpClient CreateClient(HyperVHostOptions host)
-    {
-        var client = httpClientFactory.CreateClient(nameof(HyperVApiClient));
-        client.BaseAddress = new Uri(host.BaseUrl, UriKind.Absolute);
-        client.Timeout = RequestTimeout;
-        client.DefaultRequestHeaders.Add("X-Api-Key", host.ApiKey);
-        return client;
-    }
+    public static string ClientName(string hostName) => $"{nameof(HyperVApiClient)}:{hostName}";
+
+    private HttpClient CreateClient(HyperVHostOptions host) =>
+        httpClientFactory.CreateClient(ClientName(host.Name));
 
     private HyperVHostOptions FindHost(string hostName)
     {
