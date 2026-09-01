@@ -1,4 +1,6 @@
+#pragma warning disable CA1716
 namespace Monitor.Web.Components.Shared;
+#pragma warning restore CA1716
 
 using Microsoft.AspNetCore.Components;
 

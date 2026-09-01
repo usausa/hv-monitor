@@ -11,7 +11,9 @@ public sealed class HyperVHostOptions
 {
     public string Name { get; init; } = string.Empty;
 
+#pragma warning disable CA1056
     public string BaseUrl { get; init; } = string.Empty;
+#pragma warning restore CA1056
 
     public string ApiKey { get; init; } = string.Empty;
 }

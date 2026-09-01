@@ -361,7 +361,7 @@ public sealed class HyperVService : IHyperVService
             {
                 var description = GetString(job, "ErrorDescription");
                 throw new HyperVException(
-                    string.IsNullOrEmpty(description)
+                    String.IsNullOrEmpty(description)
                         ? $"ジョブが失敗しました (状態={jobState})"
                         : $"ジョブが失敗しました: {description}");
             }

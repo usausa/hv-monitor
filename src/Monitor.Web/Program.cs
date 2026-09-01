@@ -14,7 +14,7 @@ builder.Services.AddMudServices();
 builder.Services.AddOptions<HyperVHostsOptions>()
     .Bind(builder.Configuration)
     .Validate(
-        static o => o.HyperVHosts.All(static h => !string.IsNullOrWhiteSpace(h.Name)),
+        static o => o.HyperVHosts.All(static h => !String.IsNullOrWhiteSpace(h.Name)),
         "HyperVHosts:Name is required.")
     .Validate(
         static o => o.HyperVHosts.Select(static h => h.Name).Distinct(StringComparer.Ordinal).Count() == o.HyperVHosts.Count,

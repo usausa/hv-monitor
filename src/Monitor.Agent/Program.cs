@@ -14,9 +14,9 @@ app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/api/health", StringComparison.OrdinalIgnoreCase))
     {
-        if (string.IsNullOrEmpty(apiKey) ||
+        if (String.IsNullOrEmpty(apiKey) ||
             !context.Request.Headers.TryGetValue("X-Api-Key", out var provided) ||
-            provided != apiKey)
+            (provided != apiKey))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return;

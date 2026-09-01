@@ -99,7 +99,7 @@ public sealed class HyperVApiClient : IHyperVApiClient
     {
         foreach (var host in hosts)
         {
-            if (string.Equals(host.Name, hostName, StringComparison.Ordinal))
+            if (String.Equals(host.Name, hostName, StringComparison.Ordinal))
             {
                 return host;
             }
@@ -113,12 +113,12 @@ public sealed class HyperVApiClient : IHyperVApiClient
         try
         {
             var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>(cancellationToken);
-            if (!string.IsNullOrEmpty(problem?.Detail))
+            if (!String.IsNullOrEmpty(problem?.Detail))
             {
                 return problem.Detail;
             }
 
-            if (!string.IsNullOrEmpty(problem?.Title))
+            if (!String.IsNullOrEmpty(problem?.Title))
             {
                 return problem.Title;
             }

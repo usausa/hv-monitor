@@ -47,7 +47,7 @@ public sealed partial class VmListPage : IDisposable
     private IReadOnlyList<VmRow> Rows =>
         hostResults
             .Where(r => r.Error is null)
-            .Where(r => HostFilter.Length == 0 || string.Equals(r.HostName, HostFilter, StringComparison.Ordinal))
+            .Where(r => (HostFilter.Length == 0) || String.Equals(r.HostName, HostFilter, StringComparison.Ordinal))
             .SelectMany(r => r.Vms.Select(vm => new VmRow(r.HostName, vm)))
             .ToArray();
 
